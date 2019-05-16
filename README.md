@@ -1,6 +1,6 @@
 # dicomConversionToNiftiHCC
 
-This python script facilitates batch MRI annotation in 3D Slicer's Case Iterator Extension by doing the following:
+This python script facilitates batch MRI annotation with 3D Slicer's Case Iterator Extension by doing the following:
 
   * Near autonomous conversion of DICOM images to medical image processing-friendly nifti format
   * Deidentification
