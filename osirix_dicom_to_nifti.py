@@ -15,6 +15,7 @@ import shutil
 import argparse
 import fnmatch
 import json
+import copy
 
 def remove_ds_store(folder):	
 	# Get a list of all files in directory
@@ -91,17 +92,38 @@ def combinenflip(img,output):
 	#Write Image
 	sitk.WriteImage(new_img,output)
 
-def check_directory(input_dir):
+def check_directory(input_dir,json_config):
 	remove_ds_store(input_dir)
 	output_dir = input_dir
-	for i in os.listdir(input_dir):
-		#make_folder_if_absent(os.path.join(output_dir,i))
-		for j in os.listdir(os.path.join(input_dir,i)):
-			  print ("Assessing "+i,j)
-			  sortcrap(os.path.join(input_dir,i,j),os.path.join(output_dir,i,j))
-		print ("****Sorted through possible crap in "+i)
 
-def make_big_table(input_dir):
+	with open(json_config, 'r') as f:
+		config = json.load(f)
+
+	series_key = dict()
+	for tag, series in enumerate(config["series_names"]):
+		series_key[str(tag)] = series	
+	
+	if config["special_conversion"]=='HCC':
+		for i in os.listdir(input_dir):
+			#make_folder_if_absent(os.path.join(output_dir,i))
+			for j in os.listdir(os.path.join(input_dir,i)):
+				print ("Assessing "+i,j)
+				sortcrap(os.path.join(input_dir,i,j),os.path.join(output_dir,i,j))
+			print ("****Sorted through possible crap in "+i)
+	
+	if config["special_conversion"]=="CTA-2phase":
+		pass
+
+
+def make_big_table(input_dir,json_config):
+
+	with open(json_config, 'r') as f:
+		config = json.load(f)
+
+	series_key = dict()
+	for tag, series in enumerate(config["series_names"]):
+		series_key[str(tag)] = series
+	
 	in_dir_list = os.listdir(input_dir)
 
 	big_table = list()
@@ -147,8 +169,10 @@ def make_big_table(input_dir):
 						acquisition_time = info[0x0008,0x0032].value
 						series_num = info[0x0020,0x0011].value
 						acq_date = info[0x0008,0x0020].value
+						pixel_spc = info[0x0028,0x0030].value
+						slice_thck = info[0x0018,0x0050].value
 
-						big_table.append([mrn,acc,machine,slugged_series_folder,acquisition_time,series_num,series_desc])
+						big_table.append([mrn,acc,machine,slugged_series_folder,acquisition_time,series_num,series_desc," ",pixel_spc,slice_thck])
 						#print (mrn,acc,os.path.join(input_dir,i,j,k),acquisition_time,series_desc)
 
 					except KeyError:
@@ -157,7 +181,7 @@ def make_big_table(input_dir):
 						pass
 	##Sort by MRN, then ACC, then Acq Time, then Series Number
 	big_table = sorted(big_table, key=itemgetter(1,4,5))
-	big_table.insert(0,["MRN","ACC","Machine","Series Path","Acq Time","Series Number","Series Desc","Tag(0=pre,1=ea,2=ea_sub,3=la,4=la_sub,5=pv,6=pv_sub,7=ev,8=ev_sub,9=adc)"])
+	big_table.insert(0,["MRN","ACC","Machine","Series Path","Acq Time","Series Number","Series Desc","Tag"+str(series_key),"XY Resolution","Slice Size"])
 
 	return big_table
 
@@ -193,11 +217,17 @@ def write_by_series(json_config,input_table,output_dir):
 
 			image = series_key[row[7]]
 
-			if os.path.isfile(os.path.join(output_dir,acc,image+"nii.gz"))==True:
-				pass
+			if os.path.isfile(os.path.join(output_dir,acc,image+".nii.gz"))==True:
+				print ("ALREADY CONVERTED")
+				continue
+
+			if image == "two-phase":
+				split_then_convert(image,row,output_dir,config)
+				continue
+
 			convert_to_nifti(image,row,output_dir)			
 		else:
-			print ("pass")
+			pass
 			print ("Already converted, or inappropriate tag "+str(row))
 
 def convert_to_nifti(name,row,output_dir):
@@ -218,13 +248,56 @@ def convert_to_nifti(name,row,output_dir):
 		print (e)
 		print ("Error with dcm2nii for "+row[1]+row[6]+", skipping")
 
+def split_then_convert(image,row,output_dir,config):
+
+	print ("Splitting Folder By Acquisition Time")
+
+	if config["special_conversion"] == "CTA-2phase":
+		
+		times = list()
+		
+		for i in os.listdir(row[3]):
+			if os.path.isdir(os.path.join(row[3],i)):
+				continue
+			info = pydicom.read_file(os.path.join(row[3],i))
+			times.append(info[0x0008,0x0032].value)
+		
+		unique_times = list(set(times))
+
+		print ("Before Sort "+str(unique_times))
+		unique_times.sort()
+		print ("After Sort "+str(unique_times))
+
+		make_folder_if_absent(os.path.join(row[3],"Arterial"))
+		make_folder_if_absent(os.path.join(row[3],"Venous"))
+
+		for i in os.listdir(row[3]):
+			if os.path.isdir(os.path.join(row[3],i)):
+				continue
+			info = pydicom.read_file(os.path.join(row[3],i))
+			if info[0x0008,0x0032].value == unique_times[0]:
+				os.rename(os.path.join(row[3],i),os.path.join(row[3],"Arterial",i))
+			if info[0x0008,0x0032].value == unique_times[1]:
+				os.rename(os.path.join(row[3],i),os.path.join(row[3],"Venous",i))
+
+		art_row = copy.copy(row)
+		ven_row = copy.copy(row)
+		
+		art_row[3] = os.path.join(row[3],"Arterial")
+		ven_row[3] = os.path.join(row[3],"Venous")
+
+		if os.path.isfile(os.path.join(output_dir,row[1],"arterial.nii.gz"))==False and os.path.isfile(os.path.join(output_dir,row[1],"venous.nii.gz"))==False:	
+			convert_to_nifti("arterial",art_row,output_dir)
+			convert_to_nifti("venous",ven_row,output_dir)
+		else:
+			print ("ALREADY CONVERTED")
 
 parser = argparse.ArgumentParser(description='HorosExportToNiftiForHCC')
 
 parser.add_argument("--dicomDir", dest="input_dir", required=False)
 parser.add_argument("--tablePath", dest="table_dir", required=False)
 parser.add_argument("--niftiDir", dest="output_dir", required=False)
-parser.add_argument("--configFile", dest="json_config", required=False)
+parser.add_argument("--configFile", dest="json_config", required=True)
 
 parser.add_argument("--grabMetadata", action="store_true", dest="grabMeta", default=False)
 parser.add_argument("--convertFromTable", action="store_true", dest="convert", default=False)
@@ -234,12 +307,12 @@ op  = parser.parse_args()
 
 if op.grabMeta == True:
 	remove_ds_store(op.input_dir)
-	big_table = make_big_table(op.input_dir)
+	big_table = make_big_table(op.input_dir,op.json_config)
 	write_dicom_table(big_table, op.table_dir)
 
 if op.convert == True:
 	if op.table_dir is not None and op.json_config is not None:
 		write_by_series(op.json_config,op.table_dir,op.output_dir)
-		check_directory(op.output_dir)
+		check_directory(op.output_dir,op.json_config)
 	else:
 		print ("Need to define input table with proper tags")
