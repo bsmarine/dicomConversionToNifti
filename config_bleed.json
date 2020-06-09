@@ -1,0 +1,14 @@
+{
+
+"project":"Body Bleed",
+
+"series_names":[
+    "non-con",
+    "arterial",
+    "venous",
+    "two-phase"
+],
+
+"special_conversion":"CTA-2phase"
+
+}

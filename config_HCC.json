@@ -1,0 +1,21 @@
+{
+
+"project":"HCC_MRI",
+
+"series_names":[
+    "T1_pre",
+    "T1_EA",
+    "T1_EA_sub",
+    "T1_LA",
+    "T1_LA_sub",
+    "T1_PV",
+    "T1_PV_sub",
+    "T1_EV",
+    "T1_EV_sub",
+    "ADC",
+    "ADC_1"
+],
+
+"special_conversion":"HCC"
+
+}
