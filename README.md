@@ -1,12 +1,12 @@
 # dicomConversionToNiftiHCC
 
-Currently can be used for conversion of pre- and post-treatment MRI abdomen studies AND CT angiography studies
-
 This python script facilitates standardized conversion of DICOM studies into nifti format by doing the following:
 
   * Near autonomous conversion of DICOM images to medical image processing-friendly nifti format
   * Deidentification
   * Assignment of a standardized naming convention relevant to a given annotation routine, for example, labling liver lesions on T1 and ADC sequences before and after treatment (easily customized for other uses)
+  
+Currently can be used for conversion of pre- and post-treatment MRI abdomen studies AND CT angiography studies by using the appropriate config file
 
 ## Dependencies
 
