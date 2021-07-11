@@ -1,2 +1,5 @@
-numpy==1.18.0
-pandas==1.0.5
+SimpleITK==1.2.4
+numpy
+pydicom
+nipype
+slugify
